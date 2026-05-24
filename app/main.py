@@ -32,12 +32,15 @@ def get_connection():
             port=5432
         )
 
-# Configurar la ruta absoluta de la carpeta frontend
-# Sube un nivel desde 'app/' para encontrar la carpeta 'frontend'
+# Configurar la ruta absoluta de la carpeta frontend subiendo un nivel desde 'app/'
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
 
-# Servir archivos estáticos (por si agregas carpetas css/js/images en el futuro dentro de frontend)
+# Si el contenedor aplana las carpetas en la raíz, usamos la ruta alternativa por seguridad
+if not os.path.exists(FRONTEND_DIR):
+    FRONTEND_DIR = "./frontend"
+
+# Servir archivos estáticos si la carpeta existe
 if os.path.exists(FRONTEND_DIR):
     app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 
@@ -45,10 +48,24 @@ if os.path.exists(FRONTEND_DIR):
 # 🌐 MOSTRAR EL MAPA EN LA RAÍZ
 @app.get("/", response_class=HTMLResponse)
 def root():
+    # Intento 1: Buscar index.html usando la ruta calculada dinámicamente
     index_path = os.path.join(FRONTEND_DIR, "index.html")
     if os.path.exists(index_path):
         with open(index_path, "r", encoding="utf-8") as file:
             return file.read()
+            
+    # Intento 2: Buscar index.html en la raíz directa del contenedor
+    fallback_path = "./frontend/index.html"
+    if os.path.exists(fallback_path):
+        with open(fallback_path, "r", encoding="utf-8") as file:
+            return file.read()
+            
+    # Intento 3: Buscar index.html un nivel arriba de forma literal
+    literal_path = "../frontend/index.html"
+    if os.path.exists(literal_path):
+        with open(literal_path, "r", encoding="utf-8") as file:
+            return file.read()
+            
     return "<h1>Error: No se encontró el archivo index.html en la carpeta frontend</h1>"
 
 
