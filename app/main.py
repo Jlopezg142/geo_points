@@ -1,6 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 import psycopg2
+import os
 
 app = FastAPI()
 
@@ -12,20 +15,41 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-DB_CONFIG = {
-    "host": "geo_db",
-    "database": "geopoints",
-    "user": "postgres",
-    "password": "postgres",
-    "port": 5432
-}
+# Configuración de base de datos dinámica para Render o Local
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
 def get_connection():
-    return psycopg2.connect(**DB_CONFIG)
+    if DATABASE_URL:
+        # En producción (Render) se conecta usando la URL interna generada por la plataforma
+        return psycopg2.connect(DATABASE_URL)
+    else:
+        # En desarrollo local (Docker local) usa la configuración clásica previa
+        return psycopg2.connect(
+            host="geo_db",
+            database="geopoints",
+            user="postgres",
+            password="postgres",
+            port=5432
+        )
 
-@app.get("/")
+# Configurar la ruta absoluta de la carpeta frontend
+# Sube un nivel desde 'app/' para encontrar la carpeta 'frontend'
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
+
+# Servir archivos estáticos (por si agregas carpetas css/js/images en el futuro dentro de frontend)
+if os.path.exists(FRONTEND_DIR):
+    app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
+
+
+# 🌐 MOSTRAR EL MAPA EN LA RAÍZ
+@app.get("/", response_class=HTMLResponse)
 def root():
-    return {"message": "API funcionando 🚀"}
+    index_path = os.path.join(FRONTEND_DIR, "index.html")
+    if os.path.exists(index_path):
+        with open(index_path, "r", encoding="utf-8") as file:
+            return file.read()
+    return "<h1>Error: No se encontró el archivo index.html en la carpeta frontend</h1>"
 
 
 # 🔍 OBTENER PUNTOS (CON FILTRO)
