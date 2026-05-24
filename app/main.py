@@ -20,8 +20,10 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 
 def get_connection():
     if DATABASE_URL:
+        # En producción (Render) se conecta usando la URL interna generada por la plataforma
         return psycopg2.connect(DATABASE_URL)
     else:
+        # En desarrollo local (Docker local) usa la configuración clásica previa
         return psycopg2.connect(
             host="geo_db",
             database="geopoints",
@@ -30,14 +32,15 @@ def get_connection():
             port=5432
         )
 
-# Definir la ruta del frontend de forma directa gracias al nuevo Dockerfile
-FRONTEND_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend")
+# Configurar la ruta absoluta de la carpeta frontend subiendo un nivel desde 'app/'
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
 
-# Si por alguna razón la ruta anterior varía, usamos la ruta absoluta del contenedor
+# Si el contenedor aplana las carpetas en la raíz, usamos la ruta alternativa por seguridad
 if not os.path.exists(FRONTEND_DIR):
     FRONTEND_DIR = "/workspace/frontend"
 
-# Servir archivos estáticos
+# Servir archivos estáticos si la carpeta existe
 if os.path.exists(FRONTEND_DIR):
     app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 
@@ -49,11 +52,11 @@ def root():
     if os.path.exists(index_path):
         with open(index_path, "r", encoding="utf-8") as file:
             return file.read()
-    return f"<h1>Error: No se encontró index.html en la ruta: {FRONTEND_DIR}</h1>"
+    return f"<h1>Error: No se encontró el archivo index.html en la ruta: {FRONTEND_DIR}</h1>"
 
 
-# 🔍 OBTENER PUNTOS (CON FILTRO)
-@app.get("/puntos")
+# 🔍 OBTENER PUNTOS (CON FILTRO /API)
+@app.get("/api/puntos")
 def get_puntos(categoria: str = None):
     conn = get_connection()
     cur = conn.cursor()
@@ -90,8 +93,8 @@ def get_puntos(categoria: str = None):
     }
 
 
-# ➕ CREAR PUNTO
-@app.post("/puntos")
+# ➕ CREAR PUNTO (/API)
+@app.post("/api/puntos")
 def crear_punto(punto: dict):
     conn = get_connection()
     cur = conn.cursor()
@@ -114,8 +117,8 @@ def crear_punto(punto: dict):
     return {"mensaje": "Punto creado"}
 
 
-# ✏️ ACTUALIZAR
-@app.put("/puntos/{id}")
+# ✏️ ACTUALIZAR (/API)
+@app.put("/api/puntos/{id}")
 def actualizar_punto(id: int, punto: dict):
     conn = get_connection()
     cur = conn.cursor()
@@ -141,8 +144,8 @@ def actualizar_punto(id: int, punto: dict):
     return {"mensaje": "Actualizado"}
 
 
-# ❌ ELIMINAR
-@app.delete("/puntos/{id}")
+# ❌ ELIMINAR (/API)
+@app.delete("/api/puntos/{id}")
 def eliminar_punto(id: int):
     conn = get_connection()
     cur = conn.cursor()
