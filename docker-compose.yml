@@ -1,0 +1,41 @@
+services:
+
+  geo_db:
+    image: postgis/postgis:15-3.3
+    container_name: geo_db
+    env_file:
+      - .env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - geo_network
+
+  app:
+    build: ./app
+    container_name: geo_app
+    env_file:
+      - .env
+    depends_on:
+      - geo_db
+    networks:
+      - geo_network
+
+  proxy:
+    image: nginx:latest
+    container_name: geo_proxy
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./frontend:/usr/share/nginx/html
+    depends_on:
+      - app
+    networks:
+      - geo_network
+
+volumes:
+  postgres_data:
+
+networks:
+  geo_network:

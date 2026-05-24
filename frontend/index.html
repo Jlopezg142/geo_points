@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeoPoints Pro - Gestión Completa</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; margin: 0; display: flex; height: 100vh; overflow: hidden; }
+        #map { flex: 2; height: 100%; }
+        .sidebar { flex: 1; background: #ffffff; border-left: 1px solid #ddd; display: flex; flex-direction: column; padding: 20px; overflow-y: auto; }
+        h2 { margin-top: 0; color: #2c3e50; border-bottom: 2px solid #007bff; padding-bottom: 10px; }
+        .form-group { display: flex; flex-direction: column; margin-bottom: 15px; }
+        label { font-weight: bold; margin-bottom: 5px; font-size: 0.9rem; color: #666; }
+        input, select, button { padding: 12px; border: 1px solid #ccc; border-radius: 6px; font-size: 1rem; width: 100%; box-sizing: border-box; }
+        
+        /* Estilos de botones */
+        button { cursor: pointer; font-weight: bold; transition: 0.3s; }
+        #btn-submit { background-color: #28a745; color: white; border: none; margin-top: 10px; }
+        #btn-submit:hover { background-color: #218838; }
+        .btn-update { background-color: #007bff !important; }
+        
+        .btn-edit { background: #ffc107; color: black; border: none; padding: 8px; border-radius: 4px; flex: 1; }
+        .btn-delete { background: #dc3545; color: white; border: none; padding: 8px; border-radius: 4px; flex: 1; }
+        
+        .separator { margin: 20px 0; border-bottom: 1px dashed #ddd; }
+        .popup-buttons { display: flex; gap: 8px; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div class="sidebar">
+        <h2>📍 Gestión de Puntos</h2>
+        <form id="punto-form" onsubmit="guardar(event)">
+            <div class="form-group">
+                <label>Nombre del Lugar</label>
+                <input id="nombre" required placeholder="Ej: Nueva Agencia">
+            </div>
+            <div class="form-group">
+                <label>Descripción</label>
+                <input id="descripcion" placeholder="Opcional">
+            </div>
+            <div class="form-group">
+                <label>Categoría</label>
+                <select id="categoria">
+                    <option value="Punto_venta">🛒 Punto de Venta</option>
+                    <option value="Proveedores">🚚 Proveedor</option>
+                    <option value="servicio">🛠️ Servicio</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Coordenadas (Haz click en el mapa)</label>
+                <input id="lat" placeholder="Latitud" required>
+                <input id="lng" placeholder="Longitud" style="margin-top:5px;" required>
+            </div>
+            <button type="submit" id="btn-submit">Guardar Nuevo Punto</button>
+        </form>
+
+        <div class="separator"></div>
+        <div class="form-group">
+            <label>🔍 Filtrar por Categoría</label>
+            <select onchange="filtrar(this.value)">
+                <option value="">Mostrar Todas</option>
+                <option value="Punto_venta">🛒 Puntos de Venta</option>
+                <option value="Proveedores">🚚 Proveedores</option>
+                <option value="servicio">🛠️ Servicios</option>
+            </select>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script>
+        // Configuración inicial del mapa
+        let map = L.map('map').setView([14.63, -90.51], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        let markers = [];
+
+        // Capturar coordenadas al hacer click
+        map.on('click', function(e) {
+            document.getElementById('lat').value = e.latlng.lat.toFixed(6);
+            document.getElementById('lng').value = e.latlng.lng.toFixed(6);
+        });
+
+        // Función para cargar puntos desde la API
+        function cargar(cat = "") {
+            markers.forEach(m => map.removeLayer(m));
+            markers = [];
+            let url = '/api/puntos' + (cat ? '?categoria=' + cat : '');
+            
+            fetch(url)
+            .then(r => r.json())
+            .then(data => {
+                data.puntos.forEach(p => {
+                    let marker = L.marker([p.lat, p.lng]).addTo(map)
+                    .bindPopup(`
+                        <b>${p.nombre}</b><br>${p.descripcion}<br>
+                        <div class="popup-buttons">
+                            <button class="btn-edit" onclick="editar(${p.id},'${p.nombre}','${p.descripcion}','${p.categoria}',${p.lat},${p.lng})">Editar</button>
+                            <button class="btn-delete" onclick="eliminar(${p.id})">Eliminar</button>
+                        </div>
+                    `);
+                    markers.push(marker);
+                });
+            });
+        }
+
+        // Función para guardar o actualizar
+        function guardar(e) {
+            e.preventDefault();
+            const data = {
+                nombre: document.getElementById('nombre').value,
+                descripcion: document.getElementById('descripcion').value,
+                categoria: document.getElementById('categoria').value,
+                lat: parseFloat(document.getElementById('lat').value),
+                lng: parseFloat(document.getElementById('lng').value)
+            };
+
+            fetch('/api/puntos', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            }).then(r => {
+                if(r.ok) {
+                    alert("¡Punto guardado con éxito!");
+                    location.reload();
+                } else {
+                    alert("Error al guardar.");
+                }
+            });
+        }
+
+        function filtrar(c) { cargar(c); }
+
+        // Función para cargar datos en el formulario para editar
+        function editar(id, n, d, c, lt, lg) {
+            document.getElementById('nombre').value = n;
+            document.getElementById('descripcion').value = d;
+            document.getElementById('categoria').value = c;
+            document.getElementById('lat').value = lt;
+            document.getElementById('lng').value = lg;
+            
+            let btn = document.getElementById('btn-submit');
+            btn.innerText = "Actualizar Cambios";
+            btn.classList.add("btn-update");
+            
+            // Cambiamos el comportamiento del formulario para que sea un PUT
+            document.getElementById('punto-form').onsubmit = (e) => {
+                e.preventDefault();
+                fetch('/api/puntos/'+id, {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        nombre: document.getElementById('nombre').value,
+                        descripcion: document.getElementById('descripcion').value,
+                        categoria: document.getElementById('categoria').value,
+                        lat: parseFloat(document.getElementById('lat').value),
+                        lng: parseFloat(document.getElementById('lng').value)
+                    })
+                }).then(r => {
+                    if(r.ok) location.reload();
+                    else alert("Error al actualizar.");
+                });
+            };
+        }
+
+        // NUEVA FUNCIÓN: Eliminar punto
+        function eliminar(id) {
+            if (confirm("¿Seguro que quieres eliminar este punto?")) {
+                fetch(`/api/puntos/${id}`, {
+                    method: 'DELETE'
+                })
+                .then(r => {
+                    if (r.ok) {
+                        alert("Punto eliminado.");
+                        location.reload();
+                    } else {
+                        alert("Error al eliminar.");
+                    }
+                });
+            }
+        }
+
+        // Carga inicial
+        cargar();
+    </script>
+</body>
+</html>
